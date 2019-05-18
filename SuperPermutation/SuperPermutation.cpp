@@ -11,7 +11,7 @@
 
 
 /// best for 7 = 5906
-const int N = 7;
+const int N = 5;
 
 
 class List;
@@ -304,6 +304,8 @@ List* bestFit(int _numPermutations, bool* _used, List* _base )
 
 	int available = 0;
 
+	_base->cout();
+
 	// try to fit all unused permutations onto the base string
 	// record the shortest squashed resulting strings (including ties)
 	for (int i = 0; i < _numPermutations; i++)
@@ -426,29 +428,8 @@ int main()
 	std::cout << "typical minimum bound = " << goodResult << std::endl;
 
 	bool* permutationUsed = new bool[numPermutations]{};
+	permutationUsed[0] = true;
 	List* shortestList = bestFit(numPermutations, permutationUsed, permutations[0]);
-	for (int i = 0; i < numPermutations; i++)
-	{
-		List* base = new List(permutations[i]->length, permutations[i]->cloneData());
-		permutationUsed[i] = true;
-		List* result = bestFit(numPermutations, permutationUsed, base);
-		if (countPermutations(result, numPermutations) == numPermutations)
-		{
-			if (!shortestList || result->length <= shortestList->length)
-			{
-				if (shortestList) delete shortestList;
-				shortestList = result;
-				std::cout << "solution " << i << ": " << shortestList->length << std::endl;
-				shortestList->cout();
-			}
-			else
-			{
-				delete result;
-			}
-		}
-		permutationUsed[i] = false;
-		delete base;
-	}
 	delete[] permutationUsed;
 
 	if (shortestList)
