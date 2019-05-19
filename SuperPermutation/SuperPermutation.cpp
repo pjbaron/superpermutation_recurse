@@ -11,42 +11,15 @@
 
 
 /// best for 7 = 5906
-const int N = 5;
+const int N = 6;
 
 
 class List;
 
 // global variables
-int generation = 0;
+int numPermutations;
 List** permutations;
-int populationSize;
-double mutateOneLocationChance = 0;
-
-
-
-static unsigned long rx = 123456789, ry = 362436069, rz = 521288629;
-unsigned long ul_rnd()
-{
-	unsigned long t;
-	rx ^= rx << 16;
-	rx ^= rx >> 5;
-	rx ^= rx << 1;
-
-	t = rx;
-	rx = ry;
-	ry = rz;
-	rz = t ^ rx ^ ry;
-
-	return rz;
-}
-
-double rnd()
-{
-	double v = ul_rnd();
-	return v / ((double)ULONG_MAX + 1.0);
-}
-
-
+double goodResult;
 
 
 class List
@@ -142,6 +115,28 @@ public:
 };
 
 
+static unsigned long rx = 123456789, ry = 362436069, rz = 521288629;
+unsigned long ul_rnd()
+{
+	unsigned long t;
+	rx ^= rx << 16;
+	rx ^= rx >> 5;
+	rx ^= rx << 1;
+
+	t = rx;
+	rx = ry;
+	ry = rz;
+	rz = t ^ rx ^ ry;
+
+	return rz;
+}
+
+double rnd()
+{
+	double v = ul_rnd();
+	return v / ((double)ULONG_MAX + 1.0);
+}
+
 
 // create one of every permutation of symbols in _n into global 'permutations'
 int heapPermutation(List* _list, int _size, int _n, int _p)
@@ -193,11 +188,13 @@ int lowestBound(int _n)
 }
 
 // look for _value in _list searching from _start to _last (not end-inclusive)
-int findValue(int _value, int* _list, int _start, int _last)
+
+int findValue(int _value, int* _list, int i, int _last)
 {
-	for (int i = _start; i < _last; i++)
-		if (_list[i] == _value)
-			return i;
+	int* p = _list + i;
+	while (i++ < _last)
+		if (*p++ == _value)
+			return i - 1;
 	return -1;
 }
 
@@ -246,9 +243,9 @@ void squash(List* _list)
 }
 
 // count how many entire consecutive permutations exist in _list
-int countPermutations(List* _list, const int _numPermutations)
+int countPermutations(List* _list)
 {
-	int* pointers = new int[_numPermutations] {};
+	int* pointers = new int[numPermutations] {};
 	int c = 0;
 
 	// for every value in this _list
@@ -257,7 +254,7 @@ int countPermutations(List* _list, const int _numPermutations)
 		int v = _list->data[i];
 
 		// for every permutation
-		for (int j = 0; j < _numPermutations; j++)
+		for (int j = 0; j < numPermutations; j++)
 		{
 			// if we haven't matched this permutation yet
 			if (pointers[j] < N)
@@ -286,7 +283,7 @@ int countPermutations(List* _list, const int _numPermutations)
 		}
 
 		// exit if we've found all of the permutations
-		if (c >= _numPermutations)
+		if (c >= numPermutations)
 			break;
 	}
 
@@ -295,20 +292,22 @@ int countPermutations(List* _list, const int _numPermutations)
 }
 
 int stackDepth = 0;
-List* bestFit(int _numPermutations, bool* _used, List* _base )
+int progressCount = 0;
+List* bestFit(bool* _used, List* _base, bool _alternatives = false )
 {
-	List** shortestList = new List*[_numPermutations];
-	int* shortestOrigin = new int[_numPermutations];
+	int startLength = _base->length;
+	List** shortestList = new List*[numPermutations];
+	int* shortestOrigin = new int[numPermutations];
 	int shortCount = 0;
 	int shortest = INT32_MAX;
 
 	int available = 0;
 
-	_base->cout();
+	//_base->cout();
 
 	// try to fit all unused permutations onto the base string
 	// record the shortest squashed resulting strings (including ties)
-	for (int i = 0; i < _numPermutations; i++)
+	for (int i = 0; i < numPermutations; i++)
 	{
 		if (!_used[i])
 		{
@@ -342,7 +341,7 @@ List* bestFit(int _numPermutations, bool* _used, List* _base )
 	}
 
 	// there are no permutations available
-	if (available == 0)
+	if (available == 0 || shortCount == 0)
 	{
 		for (int s = 0; s < shortCount; s++)
 			delete shortestList[s];
@@ -351,16 +350,32 @@ List* bestFit(int _numPermutations, bool* _used, List* _base )
 		return _base->clone();
 	}
 
-	// recurse for all tied shortest strings
+	// recurse for tied shortest strings
 	List* best = nullptr;
-	//if (shortCount > 1) std::cout << "results tied x " << shortCount << std::endl;
-	for (int i = 0; i < shortCount; i++)
+	//std::cout << "progress " << shortestList[0]->length << std::endl;
+
+	// terminate if this will grow the string significantly and there are still alternatives to explore
+	int growth = shortestList[0]->length - startLength;
+	if (growth > 2)
+	{
+		if (_alternatives)
+		{
+			std::cout << growth << "@" << startLength << std::endl;
+			return _base;
+		}
+	}
+
+	// explore deeper recursively near the end of the search where it's relatively cheap
+	int deep = 1;
+	if (stackDepth > goodResult / 2) deep = min(shortCount, 2);
+	if (stackDepth > goodResult * 3 / 4) deep = shortCount;
+	for (int i = 0; i < deep; i++)
 	{
 		_used[shortestOrigin[i]] = true;
 
 		stackDepth++;
 		List* copy = shortestList[i]->clone();
-		List* r = bestFit(_numPermutations, _used, copy);
+		List* r = bestFit(_used, copy, i < deep - 1);
 		stackDepth--;
 
 		if (r)
@@ -404,10 +419,10 @@ List* bestFit(int _numPermutations, bool* _used, List* _base )
 
 int main()
 {
-	const int numPermutations = factorial(N);
+	numPermutations = factorial(N);
 
 	/// NOTE: good results = n! + (n-1)! + (n-2)! + (n-3!) + n - 3  (Egan et al)
-	const double goodResult = lowestBound(N);
+	goodResult = lowestBound(N);
 
 	///the maximum incentive for a genome to grow longer
 	const double maxIncentive = (goodResult * goodResult);
@@ -423,18 +438,18 @@ int main()
 	heapPermutation(symbolList, N, N, 0);
 
 	std::cout << "permutations of " << N << " = " << numPermutations << std::endl;
-	for (int i = 0; i < numPermutations; i++)
-		permutations[i]->cout();
-	std::cout << "typical minimum bound = " << goodResult << std::endl;
+	//for (int i = 0; i < numPermutations; i++)
+	//	permutations[i]->cout();
+	std::cout << "low length result = " << goodResult << std::endl;
 
 	bool* permutationUsed = new bool[numPermutations]{};
 	permutationUsed[0] = true;
-	List* shortestList = bestFit(numPermutations, permutationUsed, permutations[0]);
+	List* shortestList = bestFit(permutationUsed, permutations[0]);
 	delete[] permutationUsed;
 
 	if (shortestList)
 	{
-		int p = countPermutations(shortestList, numPermutations);
+		int p = countPermutations(shortestList);
 		std::cout << "RESULTS:\npermutations = " << p << "\nlength = " << shortestList->length << std::endl;
 		shortestList->cout();
 		std::cout << "\n" << std::endl;
